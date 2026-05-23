@@ -14,7 +14,11 @@ class BluetoothService extends ChangeNotifier {
   int     sensorLeft  = 0;
   int     sensorFront = 0;
   int     sensorRight = 0;
-  int     parkingPhase = 0;
+  int     parkingPhase  = 0;
+  bool    lowBattAlert  = false;
+
+  // Threshold mirrors battery1.h: BATT_CRITICAL = 60.0
+  static const int battCritical = 60;
 
   final List<String> logs = [];
 
@@ -64,6 +68,7 @@ class BluetoothService extends ChangeNotifier {
     parkingPhase = 0;
     batteryPct   = 0;
     batteryVolts = 0.0;
+    lowBattAlert = false;
     sensorLeft   = 0;
     sensorFront  = 0;
     sensorRight  = 0;
@@ -122,6 +127,7 @@ class BluetoothService extends ChangeNotifier {
 
     // ── Low battery alert ───────────────────────────────────────────────────
     } else if (line == 'ALERT:LOW_BATT') {
+      lowBattAlert = true;
       _addLog('warn', '⚠ LOW BATTERY');
       notifyListeners();
 

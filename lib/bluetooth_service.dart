@@ -17,9 +17,6 @@ class BluetoothService extends ChangeNotifier {
   int     parkingPhase  = 0;
   bool    lowBattAlert  = false;
 
-  // Threshold mirrors battery1.h: BATT_CRITICAL = 60.0
-  static const int battCritical = 60;
-
   final List<String> logs = [];
 
   BluetoothConnection? _conn;

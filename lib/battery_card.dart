@@ -1,115 +1,209 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'bluetooth_service.dart';
 
-class BatteryCard extends StatelessWidget {
-  final int pct;
-  final double volts;
-  final bool connected;
+class BatteryCard extends StatefulWidget {
+  final int              pct;
+  final double           volts;
+  final bool             connected;
+  final bool             lowBattAlert;
 
   const BatteryCard({
     super.key,
     required this.pct,
     required this.volts,
     required this.connected,
+    required this.lowBattAlert,
   });
 
+  @override
+  State<BatteryCard> createState() => _BatteryCardState();
+}
+
+class _BatteryCardState extends State<BatteryCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulse;
+  late Animation<double>   _glow;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _glow = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  // ── Threshold mirrors battery1.h BATT_CRITICAL = 60 ──────────────────────
+  bool get _isCritical =>
+      widget.connected && widget.pct <= BluetoothService.battCritical;
+
   Color get _fillColor {
-    if (pct > 50) return AppTheme.green;
-    if (pct > 20) return AppTheme.yellow;
-    return AppTheme.red;
+    if (!widget.connected) return AppTheme.borderColor;
+    if (_isCritical)             return AppTheme.red;
+    if (widget.pct > 50)         return AppTheme.green;
+    return AppTheme.yellow;
   }
 
   String get _statusText {
-    if (!connected) return '—';
-    if (pct > 50) return 'Normal';
-    if (pct > 20) return 'Low';
-    return 'Critical';
+    if (!widget.connected) return '—';
+    if (_isCritical)       return 'Critical';
+    if (widget.pct > 50)   return 'Normal';
+    return 'Low';
   }
 
   Color get _statusColor {
-    if (!connected) return AppTheme.textMuted;
-    if (pct > 50) return AppTheme.green;
-    if (pct > 20) return AppTheme.yellow;
-    return AppTheme.red;
+    if (!widget.connected) return AppTheme.textMuted;
+    if (_isCritical)       return AppTheme.red;
+    if (widget.pct > 50)   return AppTheme.green;
+    return AppTheme.yellow;
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayPct = connected ? pct : 0;
-    final displayV   = connected ? volts : 0.0;
+    final displayPct = widget.connected ? widget.pct   : 0;
+    final displayV   = widget.connected ? widget.volts : 0.0;
 
-    return _Card(
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left: label + percentage
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      const Icon(Icons.battery_charging_full,
-                          size: 13, color: AppTheme.textMuted),
-                      const SizedBox(width: 4),
-                      const Text('Battery',
-                          style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                    ]),
-                    const SizedBox(height: 2),
-                    Text('$displayPct%',
-                      style: const TextStyle(
-                        fontSize: 26, fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimary)),
-                  ],
-                ),
-              ),
-              // Right: volts + status
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${displayV.toStringAsFixed(1)} V',
-                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                  const SizedBox(height: 2),
-                  Text(_statusText,
-                      style: TextStyle(fontSize: 11, color: _statusColor)),
-                ],
+    return AnimatedBuilder(
+      animation: _glow,
+      builder: (context, child) {
+        // Border pulses red when critical, static otherwise
+        final borderColor = _isCritical
+            ? Color.lerp(
+                AppTheme.red.withOpacity(0.3),
+                AppTheme.red,
+                _glow.value,
+              )!
+            : AppTheme.borderColor;
+
+        final shadowColor = _isCritical
+            ? AppTheme.red.withOpacity(_glow.value * 0.45)
+            : Colors.transparent;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _isCritical
+                ? Color.lerp(AppTheme.bgCard,
+                    AppTheme.red.withOpacity(0.08), _glow.value)
+                : AppTheme.bgCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor, width: _isCritical ? 1.5 : 0.5),
+            boxShadow: [
+              BoxShadow(
+                color: shadowColor,
+                blurRadius: 18,
+                spreadRadius: 2,
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: connected ? displayPct / 100 : 0,
-              minHeight: 8,
-              backgroundColor: AppTheme.borderColor,
-              valueColor: AlwaysStoppedAnimation(_fillColor),
-            ),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left: label + percentage
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(
+                            _isCritical
+                                ? Icons.battery_alert
+                                : Icons.battery_charging_full,
+                            size: 13,
+                            color: _isCritical ? AppTheme.red : AppTheme.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('Battery',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: _isCritical
+                                      ? AppTheme.red
+                                      : AppTheme.textMuted)),
+                        ]),
+                        const SizedBox(height: 2),
+                        Text('$displayPct%',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w500,
+                            color: _isCritical
+                                ? AppTheme.red
+                                : AppTheme.textPrimary,
+                          )),
+                      ],
+                    ),
+                  ),
+                  // Right: volts + status
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('${displayV.toStringAsFixed(1)} V',
+                          style: const TextStyle(
+                              fontSize: 11, color: AppTheme.textMuted)),
+                      const SizedBox(height: 2),
+                      Text(_statusText,
+                          style:
+                              TextStyle(fontSize: 11, color: _statusColor)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Progress bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: widget.connected ? displayPct / 100 : 0,
+                  minHeight: 8,
+                  backgroundColor: AppTheme.borderColor,
+                  valueColor: AlwaysStoppedAnimation(_fillColor),
+                ),
+              ),
+              // Critical warning banner — shown only when ALERT:LOW_BATT received
+              if (widget.lowBattAlert) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 8, horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.redBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AppTheme.redBorder, width: 0.5),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 14,
+                        color: AppTheme.red
+                            .withOpacity(0.4 + 0.6 * _glow.value)),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Battery critical — charge immediately',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.red,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ]),
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Shared card shell ─────────────────────────────────────────────────────
-class _Card extends StatelessWidget {
-  final Widget child;
-  const _Card({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderColor, width: 0.5),
-      ),
-      child: child,
+        );
+      },
     );
   }
 }

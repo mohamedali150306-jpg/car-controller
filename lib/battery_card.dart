@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
-import 'bluetooth_service.dart';
+
+// Mirrors battery1.h: BATT_CRITICAL = 60.0
+const int _kBattCritical = 60;
 
 class BatteryCard extends StatefulWidget {
   final int              pct;
@@ -45,7 +47,7 @@ class _BatteryCardState extends State<BatteryCard>
 
   // ── Threshold mirrors battery1.h BATT_CRITICAL = 60 ──────────────────────
   bool get _isCritical =>
-      widget.connected && widget.pct <= BluetoothService.battCritical;
+      widget.connected && widget.pct <= _kBattCritical;
 
   Color get _fillColor {
     if (!widget.connected) return AppTheme.borderColor;
